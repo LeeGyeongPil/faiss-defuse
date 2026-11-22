@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "faiss-defuse"
-version = "0.1.0"
+version = "0.1.1"
 description = "Inspect, convert and load LangChain FAISS stores without executing pickle: static scan, pickle-free format, flag-free loader."
 readme = "README.md"
 license = { text = "MIT" }

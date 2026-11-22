@@ -6,6 +6,8 @@ on:
   schedule:
     - cron: "17 3 * * 1"   # every Monday: catches breakage from new langchain-community / faiss releases
   workflow_dispatch:
+permissions:
+  contents: read
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -14,11 +16,20 @@ jobs:
       matrix:
         python: ["3.11", "3.12", "3.13"]
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      # Use Node 24-based action versions (Node 20 actions are deprecated on hosted runners).
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v10.4.0
       - run: uv python install ${{ matrix.python }}
       - run: uv sync --locked --python ${{ matrix.python }}
       - run: uv pip list | grep -iE "langchain|faiss|numpy|pydantic"
       - run: uv run --python ${{ matrix.python }} pytest -q
-      - run: uv run --python ${{ matrix.python }} faiss-defuse demo --out "$RUNNER_TEMP/faiss-defuse-demo"
+      - run: uv run --python ${{ matrix.python }} faiss-defuse --lang en demo --out "$RUNNER_TEMP/faiss-defuse-demo"
       - run: uv build
+      # The core needs no extras: install the wheel alone and scan/verify the demo stores.
+      - name: core install without extras
+        run: |
+          uv venv "$RUNNER_TEMP/core" --python ${{ matrix.python }}
+          uv pip install --python "$RUNNER_TEMP/core" dist/*.whl
+          "$RUNNER_TEMP/core/bin/python" -I -c "import sys, faiss_defuse; bad = sorted(m for m in sys.modules if m.split('.')[0] in {'faiss', 'numpy', 'langchain_core', 'langchain_community', 'pydantic'}); assert not bad, bad"
+          "$RUNNER_TEMP/core/bin/faiss-defuse" --lang en scan "$RUNNER_TEMP/faiss-defuse-demo/clean"
+          "$RUNNER_TEMP/core/bin/faiss-defuse" --lang en verify "$RUNNER_TEMP/faiss-defuse-demo/converted" --against "$RUNNER_TEMP/faiss-defuse-demo/clean"
